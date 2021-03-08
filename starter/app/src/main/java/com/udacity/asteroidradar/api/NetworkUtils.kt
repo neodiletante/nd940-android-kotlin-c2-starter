@@ -1,7 +1,10 @@
 package com.udacity.asteroidradar.api
 
+import android.util.Log
 import com.udacity.asteroidradar.Asteroid
 import com.udacity.asteroidradar.Constants
+import com.udacity.asteroidradar.database.AsteroidsDatabase
+import com.udacity.asteroidradar.database.DatabaseAsteroid
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -14,7 +17,7 @@ fun parseAsteroidsJsonResult(jsonResult: JSONObject): ArrayList<Asteroid> {
 
     val nextSevenDaysFormattedDates = getNextSevenDaysFormattedDates()
     for (formattedDate in nextSevenDaysFormattedDates) {
-        val dateAsteroidJsonArray = nearEarthObjectsJson.getJSONArray(formattedDate)
+            val dateAsteroidJsonArray = nearEarthObjectsJson.getJSONArray(formattedDate)
 
         for (i in 0 until dateAsteroidJsonArray.length()) {
             val asteroidJson = dateAsteroidJsonArray.getJSONObject(i)
@@ -42,6 +45,21 @@ fun parseAsteroidsJsonResult(jsonResult: JSONObject): ArrayList<Asteroid> {
     return asteroidList
 }
 
+fun modelAsDatabaseModel(asteroids : List<Asteroid>): Array<DatabaseAsteroid>{
+    return asteroids.map {
+        DatabaseAsteroid(
+                id = it.id,
+                name = it.codename,
+                absolute_magnitude = it.absoluteMagnitude,
+                close_approach_date = it.closeApproachDate,
+                estimated_diameter_max = it.estimatedDiameter,
+                is_potentially_hazardous_asteroid = it.isPotentiallyHazardous,
+                kilometers_per_second = it.relativeVelocity,
+                astronomical = it.distanceFromEarth
+        )
+    }.toTypedArray()
+}
+
 private fun getNextSevenDaysFormattedDates(): ArrayList<String> {
     val formattedDateList = ArrayList<String>()
 
@@ -49,6 +67,7 @@ private fun getNextSevenDaysFormattedDates(): ArrayList<String> {
     for (i in 0..Constants.DEFAULT_END_DATE_DAYS) {
         val currentTime = calendar.time
         val dateFormat = SimpleDateFormat(Constants.API_QUERY_DATE_FORMAT, Locale.getDefault())
+        Log.d("FLUX","DATE "+dateFormat.format(currentTime))
         formattedDateList.add(dateFormat.format(currentTime))
         calendar.add(Calendar.DAY_OF_YEAR, 1)
     }
