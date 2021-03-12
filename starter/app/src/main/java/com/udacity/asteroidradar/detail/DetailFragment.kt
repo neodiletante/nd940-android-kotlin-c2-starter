@@ -24,6 +24,9 @@ class DetailFragment : Fragment() {
             displayAstronomicalUnitExplanationDialog()
         }
 
+
+        binding.activityMainImageOfTheDay.contentDescription = if (asteroid.isPotentiallyHazardous) "Is potentially Hazardous" else "Is not potentially Hazardous"
+        binding.helpButton.contentDescription = "More info"
         return binding.root
     }
 

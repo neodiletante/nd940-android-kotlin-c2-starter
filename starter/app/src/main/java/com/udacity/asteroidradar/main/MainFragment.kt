@@ -1,25 +1,33 @@
-package com.udacity.asteroidradar.main
+    package com.udacity.asteroidradar.main
 
+import android.R.attr
 import android.os.Bundle
 import android.util.Log
 import android.view.*
-import android.widget.ImageView
-import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
-import androidx.navigation.Navigation
-import androidx.navigation.findNavController
+import androidx.lifecycle.viewModelScope
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.RecyclerView
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.await
+import com.google.common.util.concurrent.ListenableFuture
 import com.squareup.picasso.Picasso
 import com.udacity.asteroidradar.Asteroid
 import com.udacity.asteroidradar.R
+import com.udacity.asteroidradar.databinding.AsteroidRowBinding
 import com.udacity.asteroidradar.databinding.FragmentMainBinding
-import kotlinx.android.synthetic.main.asteroid_row.view.*
+import kotlinx.coroutines.launch
+import timber.log.Timber
+import java.util.concurrent.ExecutionException
 
-class MainFragment : Fragment() {
+
+    class MainFragment : Fragment() {
 
     private lateinit var binding: FragmentMainBinding
+    private var viewModelAdapter: AsteroidsAdapter? = null
 
     private val viewModel: MainViewModel by lazy {
         val activity = requireNotNull(this.activity) {
@@ -31,43 +39,68 @@ class MainFragment : Fragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
                               savedInstanceState: Bundle?): View? {
+
         binding = FragmentMainBinding.inflate(inflater)
-        binding.lifecycleOwner = this
+        //binding.lifecycleOwner = this
 
-        binding.viewModel = viewModel
 
-        Log.d("FLUX","onCreateView "+ (viewModel.asteroids.value?.size ?:"NO SIZE" ))
+       binding.setLifecycleOwner(viewLifecycleOwner)
+
+
+
+     //   Log.d("FLUX", "onCreateView " + (viewModel.asteroids.value?.size ?: "NO SIZE"))
 
         setHasOptionsMenu(true)
+
+
 
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-        Log.d("FLUX","onViewCreated "+ (viewModel.asteroids.value?.size ?:"NO SIZE" ))
-        viewModel.asteroids.observe(viewLifecycleOwner, Observer<List<Asteroid>> {
-            asteroids ->
-                asteroids?.apply {
-                    Log.d("FLUX","observe asteroids "+asteroids.size)
-                    val adapter = AsteroidsAdapter(viewModel.asteroids.value!!)
-                    binding.asteroidRecycler.adapter = adapter
-                }
+    super.onViewCreated(view, savedInstanceState)
+
+        binding.viewModel = viewModel
+
+
+        viewModelAdapter = AsteroidsAdapter(AsteroidClick {
+            Log.d("FLUX", "clicked")
+            viewModel.onAsteroidClicked(it)
         })
 
-        viewModel.dbAsteroids.observe(viewLifecycleOwner, Observer {
-            dbAsteroids ->
-                dbAsteroids?.apply {
-                    Log.d("FLUX","observe dbAsteroids "+dbAsteroids.size)
-                }
+         binding.asteroidRecycler.adapter = viewModelAdapter
+
+
+        Log.d("FLUX", "onViewCreated " + (viewModel.asteroids.value?.size ?: "NO SIZE"))
+        viewModel.asteroids.observe(viewLifecycleOwner, Observer<List<Asteroid>> { asteroids ->
+            asteroids?.apply {
+                Log.d("FLUX", "SIZE adapter " + asteroids.size)
+                viewModelAdapter?.asteroids = asteroids
+            }
         })
 
-        viewModel.imageOfTheDay.observe(viewLifecycleOwner, Observer {
-            image ->
-                if (image.mediaType == "image")
-                    Picasso.with(context)
+
+
+        viewModel.dbAsteroids.observe(viewLifecycleOwner, Observer { dbAsteroids ->
+            dbAsteroids?.apply {
+                Log.d("FLUX", "observe dbAsteroids " + dbAsteroids.size)
+            }
+        })
+
+        viewModel.navigateToDetail.observe(viewLifecycleOwner, Observer { asteroid ->
+            asteroid?.let {
+                this.findNavController().navigate(MainFragmentDirections.actionShowDetail(asteroid))
+                viewModel.onDetailNavigated()
+            }
+
+        })
+
+        viewModel.imageOfTheDay.observe(viewLifecycleOwner, Observer { image ->
+            if (image.mediaType == "image")
+                Picasso.with(context)
                         .load(image.url)
                         .into(binding.activityMainImageOfTheDay)
+            binding.activityMainImageOfTheDay.contentDescription = image.title
         })
 
 
@@ -84,51 +117,68 @@ class MainFragment : Fragment() {
 
 }
 
-class AsteroidsAdapter(val asteroids: List<Asteroid>) : RecyclerView.Adapter<AsteroidViewHolder>() {
+class AsteroidClick(val block: (Asteroid) -> Unit) {
+    /**
+     * Called when a video is clicked
+     *
+     * @param video the video that was clicked
+     */
+    fun onClick(asteroid: Asteroid) = block(asteroid)
+}
+
+class AsteroidsAdapter(val callback: AsteroidClick) : RecyclerView.Adapter<AsteroidViewHolder>() {
+    var asteroids: List<Asteroid> = emptyList()
+        set(value) {
+            Log.d("FLUX", "Notify data set changed")
+            field = value
+            // For an extra challenge, update this to use the paging library.
+
+            // Notify any registered observers that the data set has changed. This will cause every
+            // element in our RecyclerView to be invalidated.
+            notifyDataSetChanged()
+        }
 
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AsteroidViewHolder {
-        val layoutInflater = LayoutInflater.from(parent.context)
-        val view = layoutInflater.inflate(R.layout.asteroid_row,parent,false)
-        return AsteroidViewHolder(view)
+        Log.d("FLUX", "onCreateViewHolder")
+        return AsteroidViewHolder.from(parent)
     }
 
     override fun onBindViewHolder(holder: AsteroidViewHolder, position: Int) {
-        val item = asteroids[position]
-        holder.itemView.name.setText(item.codename)
-        holder.itemView.date.setText(item.closeApproachDate)
-
-        holder.itemView.setOnClickListener( View.OnClickListener { view: View ->
-            view.findNavController().navigate(MainFragmentDirections.actionShowDetail(item))
-        })
-
-        var drawable = 0
-
-        if (item.isPotentiallyHazardous){
-            drawable = R.drawable.ic_status_potentially_hazardous
-        }else{
-            drawable = R.drawable.ic_status_normal
-        }
-
-        Picasso.with(holder.itemView.context)
-                .load(R.drawable.ic_status_normal)
-                .placeholder(drawable)
-                .into(holder.itemView.status)
+        //Log.d("FLUX", "onBindViewHolder")
+        holder.bind(holder, asteroids[position])
+        holder.binding.videoCallback = callback
     }
 
     override fun getItemCount(): Int {
+        //Log.d("FLUX", "SIZE  item count " + asteroids.size)
         return asteroids.size
+    }
+
+    class AsteroidListener(val clickListener: (asteroid: Asteroid) -> Unit){
+        fun onClick(asteroid: Asteroid) = clickListener(asteroid)
     }
 
 }
 
-class AsteroidViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-    val name: TextView
-    val date: TextView
-    val status: ImageView
-    init {
-        name = itemView.findViewById(R.id.name)
-        date = itemView.findViewById(R.id.date)
-        status = itemView.findViewById(R.id.status)
+class AsteroidViewHolder private constructor(val binding: AsteroidRowBinding) : RecyclerView.ViewHolder(binding.root) {
+    fun bind(holder: AsteroidViewHolder, item: Asteroid){
+        binding.name.setText(item.codename)
+        binding.date.setText(item.closeApproachDate)
+        binding.asteroid = item
+        //binding.clickListener = clickListener
+
+        holder.itemView.setOnClickListener(View.OnClickListener { view: View ->
+
+        })
+    }
+
+    companion object {
+        fun from(parent: ViewGroup): AsteroidViewHolder {
+            val layoutInflater = LayoutInflater.from(parent.context)
+            val binding = AsteroidRowBinding.inflate(layoutInflater, parent, false)
+            //val view = layoutInflater.inflate(R.layout.asteroid_row,parent,false)
+            return AsteroidViewHolder(binding)
+        }
     }
 }

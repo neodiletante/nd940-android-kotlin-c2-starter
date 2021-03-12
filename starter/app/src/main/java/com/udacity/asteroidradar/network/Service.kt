@@ -4,6 +4,7 @@ import com.jakewharton.retrofit2.adapter.kotlin.coroutines.CoroutineCallAdapterF
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.udacity.asteroidradar.Constants.BASE_URL
+import com.udacity.asteroidradar.PictureOfDay
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -22,7 +23,7 @@ interface NasaService{
     @GET("planetary/apod")
     suspend fun getImageOfTheDay(
             @Query("api_key") apiKey: String
-    ) : ImageOfTheDay
+    ) : PictureOfDay
 }
 
 private val moshi = Moshi.Builder()
@@ -52,4 +53,4 @@ object NasaApi {
     }
 }
 
-val nasa =  retrofit.create(NasaService::class.java)
+//val nasa =  retrofit.create(NasaService::class.java)

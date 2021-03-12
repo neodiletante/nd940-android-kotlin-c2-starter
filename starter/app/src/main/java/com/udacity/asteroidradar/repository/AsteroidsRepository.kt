@@ -16,6 +16,7 @@ import com.udacity.asteroidradar.network.asDatabaseModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -27,6 +28,7 @@ class AsteroidsRepository(private var database: AsteroidsDatabase) {
             Transformations.map(database.asteroidDao.getAsteroids()){
                 it.asDomainModel()
             }
+
 
     suspend fun getImageOfTheDay(){
         withContext(Dispatchers.IO){
@@ -48,30 +50,14 @@ class AsteroidsRepository(private var database: AsteroidsDatabase) {
         Log.d("FLUX",endDate)
 
         withContext(Dispatchers.IO){
-            val jsonString = NasaApi.retrofitService.getAsteroids(startDate,endDate,API_KEY)
-            //Log.d("FLUX",jsonString)
-            val asteroids =
-                parseAsteroidsJsonResult(JSONObject(jsonString))
-            Log.d("FLUX","parsed asteroids "+asteroids.size)
-            val asterix =  asteroids.map {
-            DatabaseAsteroid(
-                    id = it.id,
-                    name = it.codename,
-                    absolute_magnitude = it.absoluteMagnitude,
-                    close_approach_date = it.closeApproachDate,
-                    estimated_diameter_max = it.estimatedDiameter,
-                    is_potentially_hazardous_asteroid = it.isPotentiallyHazardous,
-                    kilometers_per_second = it.relativeVelocity,
-                    astronomical = it.distanceFromEarth
-            )
-            }.toTypedArray()
-
-            Log.d("FLUX","repository mapped asteroids "+asterix.size)
-            Log.d("FLUX","repository db asteroids "+database.asteroidDao.getAsteroids().value?.size)
-
-
-            database.asteroidDao.insertAll(*asteroids.map {
-                DatabaseAsteroid(
+            try {
+                val jsonString = NasaApi.retrofitService.getAsteroids(startDate, endDate, API_KEY)
+                //Log.d("FLUX",jsonString)
+                val asteroids =
+                    parseAsteroidsJsonResult(JSONObject(jsonString))
+                Log.d("FLUX", "parsed asteroids " + asteroids.size)
+                val asterix = asteroids.map {
+                    DatabaseAsteroid(
                         id = it.id,
                         name = it.codename,
                         absolute_magnitude = it.absoluteMagnitude,
@@ -80,10 +66,32 @@ class AsteroidsRepository(private var database: AsteroidsDatabase) {
                         is_potentially_hazardous_asteroid = it.isPotentiallyHazardous,
                         kilometers_per_second = it.relativeVelocity,
                         astronomical = it.distanceFromEarth
+                    )
+                }.toTypedArray()
+
+                Log.d("FLUX", "repository mapped asteroids " + asterix.size)
+                Log.d(
+                    "FLUX",
+                    "repository db asteroids " + database.asteroidDao.getAsteroids().value?.size
                 )
-            }.toTypedArray())
 
 
+                database.asteroidDao.insertAll(*asteroids.map {
+                    DatabaseAsteroid(
+                        id = it.id,
+                        name = it.codename,
+                        absolute_magnitude = it.absoluteMagnitude,
+                        close_approach_date = it.closeApproachDate,
+                        estimated_diameter_max = it.estimatedDiameter,
+                        is_potentially_hazardous_asteroid = it.isPotentiallyHazardous,
+                        kilometers_per_second = it.relativeVelocity,
+                        astronomical = it.distanceFromEarth
+                    )
+                }.toTypedArray())
+
+            }catch (ex: Exception){
+                ex.printStackTrace()
+            }
 
         }
     }
